@@ -20,17 +20,6 @@ add_compile_options(
   -Wnon-virtual-dtor
   -Wmisleading-indentation)
 
-# add_compile_options(-fsanitize=address) add_compile_options(-static-libasan)
-# add_compile_options(-fsanitize=thread) add_compile_options(-static-libtsan)
-
-# add_compile_options(-fsanitize=undefined)
-# add_compile_options(-static-libubsan)
-
-# add_link_options(-fsanitize=address) add_link_options(-static-libasan)
-# add_link_options(-fsanitize=thread) add_link_options(-static-libtsan)
-
-# add_link_options(-fsanitize=undefined) add_link_options(-static-libubsan)
-
 project(
   rush
   VERSION 0.0.1
@@ -43,17 +32,17 @@ find_path(LIBEV_INCLUDE_DIR ev.h)
 
 find_package(PkgConfig REQUIRED)
 
-set(OPEN_SSL_QUIC "openssl = 1.1.1q+quic")
+set(OPEN_SSL_QUIC "openssl = 1.1.1s+quic")
 pkg_check_modules(OPENSSL REQUIRED ${OPEN_SSL_QUIC})
 include_directories(${OPENSSL_INCLUDE_DIRS})
 
-pkg_check_modules(NGTCP2 REQUIRED libngtcp2)
+set(LIB_NGTCP2 "libngtcp2 = 0.11.0")
+pkg_check_modules(NGTCP2 REQUIRED ${LIB_NGTCP2})
 include_directories(${NGTCP2_INCLUDE_DIRS})
 
-pkg_check_modules(NGTCP2_OPENSSL REQUIRED libngtcp2_crypto_openssl)
+set(LIB_NGTCP2_OPENSSL "libngtcp2_crypto_openssl = 0.11.0")
+pkg_check_modules(NGTCP2_OPENSSL REQUIRED ${LIB_NGTCP2_OPENSSL})
 include_directories(${NGTCP2_OPENSSL_DIRS})
-
-# set(CMAKE_CXX_CLANG_TIDY clang-tidy.par -checks=concurrency-)
 
 add_library(
   rush
@@ -85,7 +74,7 @@ target_link_libraries(rush ${LIBEV_LIBRARIES})
 
 set(LIBS_PRIVATE "-lpthread -lstdc++ -lev")
 set(REQUIRES_PRIVATE
-    "libngtcp2 libngtcp2_crypto_openssl ${OPEN_SSL_QUIC} libcrypto")
+    "${LIB_NGTCP2} ${LIB_NGTCP2_OPENSSL} ${OPEN_SSL_QUIC} libcrypto")
 
 configure_file(librush.pc.in librush.pc @ONLY)
 

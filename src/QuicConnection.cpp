@@ -228,6 +228,7 @@ int QuicConnection::connect() {
       ngtcp2_crypto_version_negotiation_cb,
       nullptr, /* receive rx key*/
       nullptr, /* receive tx key*/
+      nullptr, /* early data rejected*/
   };
 
   // settings
@@ -417,7 +418,7 @@ ngtcp2_connection_close_error* QuicConnection::getLastError() {
 
 int QuicConnection::onWrite() {
   const ngtcp2_tstamp ts = timestamp();
-  const size_t payloadSize = ngtcp2_conn_get_max_udp_payload_size(conn_);
+  const size_t payloadSize = ngtcp2_conn_get_max_tx_udp_payload_size(conn_);
   ngtcp2_pkt_info packetInfo;
   ngtcp2_path_storage pathStorage;
   int64_t streamId{-1};
