@@ -160,8 +160,8 @@ int RushClient::onRecvStreamData(
     uint64_t sequeneId{0};
     uint8_t type{0};
 
-    cursor.read(frameSize);
-    cursor.read(sequeneId);
+    cursor.readBE(frameSize);
+    cursor.readBE(sequeneId);
     cursor.read(type);
 
     const auto frameType = static_cast<FrameTypes>(type);
