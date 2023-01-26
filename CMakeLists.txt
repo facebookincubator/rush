@@ -60,8 +60,7 @@ add_library(
   ${PROJECT_SOURCE_DIR}/src/QuicConnection.cpp)
 
 set(PUBLIC_HEADERS ${PROJECT_SOURCE_DIR}/include/Rush.h
-                   ${PROJECT_SOURCE_DIR}/include/CodecUtils.h
-                   ${PROJECT_SOURCE_DIR}/include/server.h)
+                   ${PROJECT_SOURCE_DIR}/include/CodecUtils.h)
 
 set_target_properties(rush PROPERTIES VERSION ${PROJECT_VERSION})
 set_target_properties(rush PROPERTIES PUBLIC_HEADER "${PUBLIC_HEADERS}")
