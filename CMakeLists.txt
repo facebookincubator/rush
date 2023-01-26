@@ -36,11 +36,11 @@ set(OPEN_SSL_QUIC "openssl = 1.1.1s+quic")
 pkg_check_modules(OPENSSL REQUIRED ${OPEN_SSL_QUIC})
 include_directories(${OPENSSL_INCLUDE_DIRS})
 
-set(LIB_NGTCP2 "libngtcp2 = 0.11.0")
+set(LIB_NGTCP2 "libngtcp2 >= 0.11.0")
 pkg_check_modules(NGTCP2 REQUIRED ${LIB_NGTCP2})
 include_directories(${NGTCP2_INCLUDE_DIRS})
 
-set(LIB_NGTCP2_OPENSSL "libngtcp2_crypto_openssl = 0.11.0")
+set(LIB_NGTCP2_OPENSSL "libngtcp2_crypto_openssl >= 0.11.0")
 pkg_check_modules(NGTCP2_OPENSSL REQUIRED ${LIB_NGTCP2_OPENSSL})
 include_directories(${NGTCP2_OPENSSL_DIRS})
 
@@ -60,7 +60,8 @@ add_library(
   ${PROJECT_SOURCE_DIR}/src/QuicConnection.cpp)
 
 set(PUBLIC_HEADERS ${PROJECT_SOURCE_DIR}/include/Rush.h
-                   ${PROJECT_SOURCE_DIR}/include/CodecUtils.h)
+                   ${PROJECT_SOURCE_DIR}/include/CodecUtils.h
+                   ${PROJECT_SOURCE_DIR}/include/server.h)
 
 set_target_properties(rush PROPERTIES VERSION ${PROJECT_VERSION})
 set_target_properties(rush PROPERTIES PUBLIC_HEADER "${PUBLIC_HEADERS}")
