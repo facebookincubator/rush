@@ -115,20 +115,8 @@ ssize_t RushMuxer::videoWithTrackFrame(
     throw std::runtime_error("Invalid video codec");
   }
 
-  int h264ProcessExtradata{0};
-  int h264KeyFrame{0};
-
-  if (codec == VideoCodec::H264) {
-    if (int error = shouldProcessExtradata(
-            data, length, &h264KeyFrame, &h264ProcessExtradata)) {
-      throw std::runtime_error("Error process H264 extradata");
-    }
-    isKeyFrame = static_cast<bool>(h264KeyFrame);
-  }
-
   const uint64_t sequenceId = getSequenceId();
-  const bool addExtradata =
-      ((codec != VideoCodec::H264 && isKeyFrame) || h264ProcessExtradata);
+  const bool addExtradata = isKeyFrame;
   const auto sample = (ByteStream){.data = data, .length = length};
   const auto codecData = addExtradata
       ? (ByteStream){.data = extradata, .length = extradataLength}
