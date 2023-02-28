@@ -9,25 +9,20 @@
 #pragma once
 
 #include <ngtcp2/ngtcp2_crypto.h>
-#include <openssl/err.h>
-#include <openssl/rand.h>
-#include <openssl/ssl.h>
-#include <fstream>
-
-static std::ofstream keylogFile{};
+#include <memory>
 
 namespace rush {
-class QuicConnection;
 
 class TLSClientContext {
  public:
-  ~TLSClientContext();
-  int init(const char* remoteHost, ngtcp2_crypto_conn_ref& ref);
-  SSL* getNativeHandle() const;
-  void enableKeylog(const char* filename);
-
- private:
-  SSL_CTX* sslCtx_{nullptr};
-  SSL* ssl_{nullptr};
+  virtual int init(const char* address, ngtcp2_crypto_conn_ref& ref) = 0;
+  virtual void* getNativeHandle() const = 0;
+  virtual int generateSecureRandom(uint8_t* data, size_t datalen) = 0;
+  virtual int
+  setConnectionId(ngtcp2_cid* cid, uint8_t* token, size_t length) = 0;
+  virtual ~TLSClientContext() = default;
 };
+
+std::unique_ptr<TLSClientContext> createTLSContext();
+
 } // namespace rush

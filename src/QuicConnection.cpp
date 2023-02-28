@@ -9,9 +9,6 @@
 #include "QuicConnection.h"
 #include "RushClient.h"
 
-#include <openssl/err.h>
-#include <openssl/rand.h>
-#include <openssl/ssl.h>
 #include <unistd.h>
 #include <algorithm>
 #include <cassert>
@@ -51,24 +48,9 @@ static int getNewConnectionIdCb(
     uint8_t* token,
     size_t cidlen,
     void* userData) {
-  (void)conn;
-  (void)userData;
-
-  if (RAND_bytes(cid->data, (int)cidlen) != 1) {
+  auto* client = static_cast<rush::QuicConnection*>(userData);
+  if (client->setConnectionId(cid, token, cidlen)) {
     return NGTCP2_ERR_CALLBACK_FAILURE;
-  }
-
-  cid->datalen = cidlen;
-
-  if (RAND_bytes(token, NGTCP2_STATELESS_RESET_TOKENLEN) != 1) {
-    return NGTCP2_ERR_CALLBACK_FAILURE;
-  }
-  return 0;
-}
-
-static int generateSecureRandom(uint8_t* data, size_t datalen) {
-  if (RAND_bytes(data, static_cast<int>(datalen)) != 1) {
-    return -1;
   }
   return 0;
 }
@@ -176,6 +158,7 @@ QuicConnection::QuicConnection(
       fd_(fd),
       localAddress_(localAddress),
       remoteAddress_(remoteAddress),
+      tls_(createTLSContext()),
       callbacks_(callbacks),
       connstate_(sharedConnectionState) {}
 
@@ -183,7 +166,7 @@ int QuicConnection::connect() {
   connRef_.get_conn = ::getConnectionCb;
   connRef_.user_data = this;
 
-  if (tls_.init(getIPAddress(remoteAddress_).c_str(), connRef_)) {
+  if (tls_->init(getIPAddress(remoteAddress_).c_str(), connRef_)) {
     std::cerr << "TLS init error" << std::endl;
     return -1;
   }
@@ -249,13 +232,13 @@ int QuicConnection::connect() {
 
   ngtcp2_cid scid, dcid;
   scid.datalen = 8;
-  if (generateSecureRandom(scid.data, scid.datalen)) {
+  if (tls_->generateSecureRandom(scid.data, scid.datalen)) {
     std::cerr << "Could not generate source connection id" << std::endl;
     return -1;
   }
 
   dcid.datalen = NGTCP2_MIN_INITIAL_DCIDLEN;
-  if (generateSecureRandom(dcid.data, dcid.datalen)) {
+  if (tls_->generateSecureRandom(dcid.data, dcid.datalen)) {
     std::cerr << "Could not generate destination connection id" << std::endl;
     return -1;
   }
@@ -288,7 +271,7 @@ int QuicConnection::connect() {
     return -1;
   }
 
-  ngtcp2_conn_set_tls_native_handle(conn_, tls_.getNativeHandle());
+  ngtcp2_conn_set_tls_native_handle(conn_, tls_->getNativeHandle());
 
   ev_io_init(&readEv_, ::readCallback, fd_, EV_READ);
   readEv_.data = this;
@@ -678,6 +661,16 @@ int QuicConnection::disconnect() {
 
   close(fd_);
 
+  return 0;
+}
+
+int QuicConnection::setConnectionId(
+    ngtcp2_cid* cid,
+    uint8_t* token,
+    size_t cidlen) {
+  if (tls_->setConnectionId(cid, token, cidlen)) {
+    return -1;
+  }
   return 0;
 }
 

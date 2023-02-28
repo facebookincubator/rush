@@ -10,7 +10,6 @@
 
 #include <ngtcp2/ngtcp2.h>
 #include <ngtcp2/ngtcp2_crypto.h>
-#include <ngtcp2/ngtcp2_crypto_openssl.h>
 #include <fstream>
 
 #include "Buffer.h"
@@ -52,6 +51,7 @@ class QuicConnection : private NonCopyable {
       uint64_t datalen,
       void* userData,
       void* streamUserData);
+  int setConnectionId(ngtcp2_cid* cid, uint8_t* token, size_t cidlen);
 
   int onRead();
   int onWrite();
@@ -79,7 +79,7 @@ class QuicConnection : private NonCopyable {
   const int fd_{-1};
   const Address localAddress_;
   const Address remoteAddress_;
-  TLSClientContext tls_;
+  std::unique_ptr<TLSClientContext> tls_;
   ev_io readEv_;
   ev_io writeEv_;
   ev_timer timer_;
