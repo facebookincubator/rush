@@ -1,0 +1,578 @@
+diff --git a/configure b/configure
+index b2fd26e..c4299ba 100755
+--- a/configure
++++ b/configure
+@@ -261,6 +261,7 @@ External library support:
+   --enable-librist         enable RIST via librist [no]
+   --enable-librsvg         enable SVG rasterization via librsvg [no]
+   --enable-librubberband   enable rubberband needed for rubberband filter [no]
++  --enable-librush         enable Meta RUSH protocol via librush [no]
+   --enable-librtmp         enable RTMP[E] support via librtmp [no]
+   --enable-libshaderc      enable GLSL->SPIRV compilation via libshaderc [no]
+   --enable-libshine        enable fixed-point MP3 encoding via libshine [no]
+@@ -1849,6 +1850,7 @@ EXTERNAL_LIBRARY_LIST="
+     librav1e
+     librist
+     librsvg
++    librush
+     librtmp
+     libshaderc
+     libshine
+@@ -3593,6 +3595,8 @@ librtmpe_protocol_deps="librtmp"
+ librtmps_protocol_deps="librtmp"
+ librtmpt_protocol_deps="librtmp"
+ librtmpte_protocol_deps="librtmp"
++librush_protocol_deps="librush"
++librush_protocol_select="network"
+ libsmbclient_protocol_deps="libsmbclient gplv3"
+ libsrt_protocol_deps="libsrt"
+ libsrt_protocol_select="network"
+@@ -6602,6 +6606,7 @@ enabled librist           && require_pkg_config librist "librist >= 0.2" librist
+ enabled librsvg           && require_pkg_config librsvg librsvg-2.0 librsvg-2.0/librsvg/rsvg.h rsvg_handle_render_cairo
+ enabled librtmp           && require_pkg_config librtmp librtmp librtmp/rtmp.h RTMP_Socket
+ enabled librubberband     && require_pkg_config librubberband "rubberband >= 1.8.1" rubberband/rubberband-c.h rubberband_new -lstdc++ && append librubberband_extralibs "-lstdc++"
++enabled librush           && require_pkg_config librush librush Rush.h createClient
+ enabled libshaderc        && require_pkg_config spirv_compiler "shaderc >= 2019.1" shaderc/shaderc.h shaderc_compiler_initialize
+ enabled libshine          && require_pkg_config libshine shine shine/layer3.h shine_encode_buffer
+ enabled libsmbclient      && { check_pkg_config libsmbclient smbclient libsmbclient.h smbc_init ||
+diff --git a/libavformat/Makefile b/libavformat/Makefile
+index 84e73e3..bbdb9df 100644
+--- a/libavformat/Makefile
++++ b/libavformat/Makefile
+@@ -186,6 +186,7 @@ OBJS-$(CONFIG_EA_DEMUXER)                += electronicarts.o
+ OBJS-$(CONFIG_EAC3_DEMUXER)              += ac3dec.o rawdec.o
+ OBJS-$(CONFIG_EAC3_MUXER)                += rawenc.o
+ OBJS-$(CONFIG_EPAF_DEMUXER)              += epafdec.o pcm.o
++OBJS-$(CONFIG_RUSH_MUXER)                += rushenc.o
+ OBJS-$(CONFIG_FFMETADATA_DEMUXER)        += ffmetadec.o
+ OBJS-$(CONFIG_FFMETADATA_MUXER)          += ffmetaenc.o
+ OBJS-$(CONFIG_FIFO_MUXER)                += fifo.o
+@@ -675,6 +676,7 @@ OBJS-$(CONFIG_LIBRTMPE_PROTOCOL)         += librtmp.o
+ OBJS-$(CONFIG_LIBRTMPS_PROTOCOL)         += librtmp.o
+ OBJS-$(CONFIG_LIBRTMPT_PROTOCOL)         += librtmp.o
+ OBJS-$(CONFIG_LIBRTMPTE_PROTOCOL)        += librtmp.o
++OBJS-$(CONFIG_LIBRUSH_PROTOCOL)          += librush.o
+ OBJS-$(CONFIG_LIBSMBCLIENT_PROTOCOL)     += libsmbclient.o
+ OBJS-$(CONFIG_LIBSRT_PROTOCOL)           += libsrt.o
+ OBJS-$(CONFIG_LIBSSH_PROTOCOL)           += libssh.o
+diff --git a/libavformat/allformats.c b/libavformat/allformats.c
+index d066a77..fe1e2ce 100644
+--- a/libavformat/allformats.c
++++ b/libavformat/allformats.c
+@@ -146,6 +146,7 @@ extern const AVInputFormat  ff_eac3_demuxer;
+ extern const AVOutputFormat ff_eac3_muxer;
+ extern const AVInputFormat  ff_epaf_demuxer;
+ extern const AVOutputFormat ff_f4v_muxer;
++extern const AVOutputFormat ff_rush_muxer;
+ extern const AVInputFormat  ff_ffmetadata_demuxer;
+ extern const AVOutputFormat ff_ffmetadata_muxer;
+ extern const AVOutputFormat ff_fifo_muxer;
+diff --git a/libavformat/librush.c b/libavformat/librush.c
+new file mode 100644
+index 0000000..898ecd8
+--- /dev/null
++++ b/libavformat/librush.c
+@@ -0,0 +1,89 @@
++#include <fcntl.h>
++#include <unistd.h>
++#include <sys/stat.h>
++#include <Rush.h>
++
++#include "network.h"
++#include "url.h"
++#include "os_support.h"
++#include "libavformat/avformat.h"
++#include "libavutil/avstring.h"
++#include "libavutil/internal.h"
++#include "libavutil/parseutils.h"
++#include "url.h"
++
++#define RUSH_ARRAY_SIZE 1024
++
++typedef struct {
++    RushClientHandle client;
++    const AVClass *class;
++    int fd;
++} RushTransportContext;
++
++static int rush_open(URLContext *h, const char *uri, int flags)
++{
++    RushTransportContext *c = h->priv_data;
++
++    char proto[RUSH_ARRAY_SIZE];
++    char hostname[RUSH_ARRAY_SIZE];
++    int port = -1;
++
++    c->client = createClient();
++
++    memset(proto, '\0', sizeof(char) * RUSH_ARRAY_SIZE);
++    memset(hostname, '\0', RUSH_ARRAY_SIZE);
++
++    av_url_split(proto, sizeof(proto),
++                 NULL, 0,
++                 hostname, sizeof(hostname),
++                 &port,
++                 NULL, 0,
++                 uri);
++
++    c->fd = connectTo(c->client, hostname, port);
++    if (c->fd < 0) {
++      av_log(h, AV_LOG_ERROR, "rush::connectTo failed\n");
++      return AVERROR(EIO);
++    }
++
++    return 0;
++}
++
++static int rush_read(URLContext *h, uint8_t *buf, int size)
++{
++    RushTransportContext *c = h->priv_data;
++    return 0;
++}
++
++static int rush_write(URLContext *h, const unsigned char *buf, int size)
++{
++    RushTransportContext *c = h->priv_data;
++    if (sendMessage(c->client, buf, size) < 0) {
++      av_log(h, AV_LOG_ERROR, "rush::SendMessage failed\n");
++      return AVERROR(EIO);
++    }
++    return size;
++}
++
++static int file_get_handle(URLContext *h)
++{
++    RushTransportContext *c = h->priv_data;
++    return c->fd;
++}
++
++static int rush_close(URLContext *h)
++{
++    RushTransportContext *c = h->priv_data;
++    rushClose(c->client);
++    destroyClient(c->client);
++    return 0;
++}
++
++const URLProtocol ff_librush_protocol = {
++    .name = "rush",
++    .url_open  = rush_open,
++    .url_read  = rush_read,
++    .url_write = rush_write,
++    .url_close = rush_close,
++    .priv_data_size = sizeof(RushTransportContext),
++};
+diff --git a/libavformat/protocols.c b/libavformat/protocols.c
+index 948fae4..f0b16c7 100644
+--- a/libavformat/protocols.c
++++ b/libavformat/protocols.c
+@@ -46,6 +46,7 @@ extern const URLProtocol ff_mmst_protocol;
+ extern const URLProtocol ff_md5_protocol;
+ extern const URLProtocol ff_pipe_protocol;
+ extern const URLProtocol ff_prompeg_protocol;
++extern const URLProtocol ff_librush_protocol;
+ extern const URLProtocol ff_rtmp_protocol;
+ extern const URLProtocol ff_rtmpe_protocol;
+ extern const URLProtocol ff_rtmps_protocol;
+diff --git a/libavformat/rushenc.c b/libavformat/rushenc.c
+new file mode 100644
+index 0000000..fa53ee3
+--- /dev/null
++++ b/libavformat/rushenc.c
+@@ -0,0 +1,396 @@
++#include <stdbool.h>
++
++#include "libavutil/avstring.c"
++#include "libavutil/avassert.h"
++#include "libavutil/bswap.h"
++#include "libavutil/crc.h"
++#include "libavutil/dict.h"
++#include "libavutil/intreadwrite.h"
++#include "libavutil/mathematics.h"
++#include "libavutil/opt.h"
++
++#include "libavcodec/ac3_parser_internal.h"
++#include "libavcodec/startcode.h"
++
++#include "avc.h"
++#include "avformat.h"
++#include "avio_internal.h"
++#include "internal.h"
++
++// The following files are provided by librush
++#include <Rush.h>
++#include <CodecUtils.h>
++
++#define ADTS_SYNC_WORD 0xFFF0
++#define RUSH_ARRAY_SIZE 1024
++
++typedef struct RushContext {
++    AVPacket *pkt;
++    RushMuxerHandle rush_muxer;
++} RushContext;
++
++typedef enum {
++    VIDEO_CODEC_H264        = 0x1,
++    VIDEO_CODEC_H265        = 0x2,
++    VIDEO_CODEC_VP8         = 0x3,
++    VIDEO_CODEC_VP9         = 0x4,
++} VideoCodec;
++
++typedef enum {
++    AUDIO_CODEC_ACC         = 0x1,
++    AUDIO_CODEC_OPUS        = 0x2,
++} AudioCodec;
++
++static const AVCodecTag rush_video_codec_ids[] = {
++  {AV_CODEC_ID_H264, VIDEO_CODEC_H264},
++  {AV_CODEC_ID_H265, VIDEO_CODEC_H265},
++  {AV_CODEC_ID_VP8,  VIDEO_CODEC_VP8},
++  {AV_CODEC_ID_VP9,  VIDEO_CODEC_VP9},
++  {AV_CODEC_ID_NONE, 0}
++};
++
++static const AVCodecTag rush_audio_codec_ids[] = {
++  {AV_CODEC_ID_AAC, AUDIO_CODEC_ACC},
++  {AV_CODEC_ID_OPUS, AUDIO_CODEC_OPUS},
++  {AV_CODEC_ID_NONE, 0}
++};
++
++static VideoCodec get_rush_codec_code(enum AVCodecID codec)
++{
++  if (codec == AV_CODEC_ID_H264) {
++    return VIDEO_CODEC_H264;
++  }
++  if (codec == AV_CODEC_ID_H265) {
++    return VIDEO_CODEC_H265;
++  }
++  if (codec == AV_CODEC_ID_VP8) {
++    return VIDEO_CODEC_VP8;
++  }
++  if (codec == AV_CODEC_ID_VP9) {
++    return VIDEO_CODEC_VP9;
++  }
++  if (codec == AV_CODEC_ID_AAC) {
++    return AUDIO_CODEC_ACC;
++  }
++  if (codec == AV_CODEC_ID_OPUS) {
++    return AUDIO_CODEC_OPUS;
++  }
++  return 0; // unsupported codec
++}
++
++static int rush_init(AVFormatContext *s)
++{
++    RushContext *ctx = (RushContext*)s->priv_data;
++    ctx->pkt = ffformatcontext(s)->pkt;
++    ctx->rush_muxer = createMuxer();
++    return 0;
++}
++
++static void rush_deinit(AVFormatContext *s)
++{
++  RushContext *ctx = (RushContext*)s->priv_data;
++
++  if (ctx->rush_muxer) {
++    destroyMuxer(ctx->rush_muxer);
++  }
++}
++
++static bool is_codec_supported(enum AVMediaType mediaType, enum AVCodecID codec)
++{
++    if (mediaType == AVMEDIA_TYPE_VIDEO) {
++        return codec == AV_CODEC_ID_H264 ||
++               codec == AV_CODEC_ID_H265 |
++               codec == AV_CODEC_ID_VP8 ||
++               codec == AV_CODEC_ID_VP9;
++    }
++    if (mediaType == AVMEDIA_TYPE_AUDIO) {
++        return codec == AV_CODEC_ID_AAC ||
++               codec == AV_CODEC_ID_OPUS;
++    }
++    return false;
++}
++
++static int rush_write_audio_packet(AVFormatContext *s, AVPacket *pkt)
++{
++    RushContext *ctx = (RushContext*)s->priv_data;
++    AVIOContext *pb = s->pb;
++    AVStream *st = s->streams[pkt->stream_index];
++    AVCodecParameters *codecpar = st->codecpar;
++    const uint8_t* original_data = pkt->data;
++    const enum AVCodecID codec = codecpar->codec_id;
++    size_t bufsize = 0;
++    uint8_t* buffer = NULL;
++    ssize_t write_length = 0;
++
++    if (!is_codec_supported(AVMEDIA_TYPE_AUDIO, codec)) {
++        av_log(s, AV_LOG_WARNING, "Unhandled format %d\n", codec);
++        return 0;
++    }
++
++    bufsize = getRushFrameSize(pkt->size, codecpar->extradata_size);
++    buffer = av_malloc(bufsize);
++
++    write_length =
++      audioWithHeaderFrame(
++          ctx->rush_muxer,
++          get_rush_codec_code(codec),
++          pkt->stream_index,
++          pkt->data,
++          pkt->size,
++          pkt->dts,
++          codecpar->extradata,
++          codecpar->extradata_size,
++          buffer,
++          bufsize);
++
++    avio_write(pb, buffer, write_length);
++
++    av_free(buffer);
++    if (pkt->data != original_data) {
++      av_free(pkt->data);
++    }
++    return 0;
++}
++
++static int rush_write_video_packet(AVFormatContext *s, AVPacket *pkt)
++{
++    RushContext *ctx = (RushContext*)s->priv_data;
++    AVIOContext *pb = s->pb;
++    AVStream *st = s->streams[pkt->stream_index];
++    AVCodecParameters *codecpar = st->codecpar;
++    int is_key_frame = 0;
++    const enum AVCodecID codec = codecpar->codec_id;
++
++    uint8_t *buffer = NULL;
++    size_t bufsize = 0;
++    ssize_t write_length = 0;
++
++    uint8_t *data = NULL;
++    int size = pkt->size;
++
++    uint8_t *extradata = NULL;
++    int extradata_size = codecpar->extradata_size;
++
++    if (!is_codec_supported(AVMEDIA_TYPE_VIDEO, codec)) {
++        av_log(s, AV_LOG_WARNING, "Unhandled format %d\n", codec);
++        return 0;
++    }
++
++    if (codec == AV_CODEC_ID_H265 || codec == AV_CODEC_ID_H264) {
++
++      // convert AnnexB formated data to length-prefixed (AVCC) format
++      if (pkt->data && !isAvccFit(pkt->data, size) && isAnnexb(pkt->data, size)) {
++        if (ff_avc_parse_nal_units_buf(pkt->data, &data, &size) < 0) {
++          av_log(s, AV_LOG_ERROR, "Error converting annexb to avcc");
++          return AVERROR(EINVAL);
++        }
++      }
++
++      // check if sps/pps are contained out-of-band in an Avcc Configuration record?
++      // If yes, then extract sps/pps NALU and store them in extradata
++      //
++      // check if extradata is formatted in AnnexB format?
++      // If yes, then convert them into length-prefixed format. Unlike length-prefixed
++      // format AnnexB sps/pps are not stored in a specialized record so we can pass the
++      // extradata as-is after conversion to length-prefixed format.
++
++      if (codecpar->extradata) {
++        if (codec == AV_CODEC_ID_H265 && isHEVCConfigRecord(codecpar->extradata, extradata_size)) {
++          extradata = (uint8_t*)av_malloc(extradata_size);
++          extradata_size = getParameterFromConfigRecordHEVC(codecpar->extradata,
++              codecpar->extradata_size,
++              extradata,
++              extradata_size);
++
++          if (extradata_size < 0) {
++            av_log(s, AV_LOG_ERROR, "Error extracting SPS/PPS from HEVC record");
++            return AVERROR(EINVAL);
++          }
++        }
++        else if (codec == AV_CODEC_ID_H264 && isH264ConfigRecord(codecpar->extradata, extradata_size)) {
++          extradata = (uint8_t*)av_malloc(extradata_size);
++          extradata_size = getPrameterFromConfigRecordH264(codecpar->extradata,
++              codecpar->extradata_size,
++              extradata,
++              extradata_size);
++          if (extradata_size < 0) {
++            av_log(s, AV_LOG_ERROR, "Error extracting SPS/PPS from AVCC record");
++            return AVERROR(EINVAL);
++          }
++        }
++        else if(isAnnexb(codecpar->extradata, extradata_size)) {
++          if (ff_avc_parse_nal_units_buf(codecpar->extradata, &extradata, &extradata_size) < 0) {
++            av_log(s, AV_LOG_ERROR, "Error converting annexb to avcc");
++            return AVERROR(EINVAL);
++          }
++        }
++      }
++    }
++
++    is_key_frame = pkt->flags & AV_PKT_FLAG_KEY;
++
++    bufsize = getRushFrameSize(size, extradata_size);
++    buffer = av_malloc(bufsize);
++
++    write_length =
++      videoWithTrackFrame(
++          ctx->rush_muxer,
++          get_rush_codec_code(codec),
++          pkt->stream_index,
++          is_key_frame,
++          data ? data : pkt->data,
++          size,
++          pkt->pts,
++          pkt->dts,
++          extradata ? extradata : codecpar->extradata,
++          extradata_size,
++          buffer,
++          bufsize);
++
++    avio_write(pb, buffer, write_length);
++
++    if (extradata) {
++      av_free(extradata);
++    }
++
++    if (data) {
++      av_free(data);
++    }
++
++    av_free(buffer);
++    return 0;
++}
++
++static int rush_write_packet(AVFormatContext *s, AVPacket *pkt)
++{
++    AVStream *st = s->streams[pkt->stream_index];
++    AVCodecParameters *codecpar = st->codecpar;
++    if (codecpar->codec_type == AVMEDIA_TYPE_AUDIO) {
++        return rush_write_audio_packet(s, pkt);
++    }
++    else if(codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
++       return rush_write_video_packet(s, pkt);
++    }
++    else {
++        av_log(s, AV_LOG_WARNING, "Unhandled format %d\n", codecpar->codec_type);
++    }
++    return 0;
++}
++
++static int rush_write_header(AVFormatContext *s)
++{
++    RushContext *ctx = (RushContext*)s->priv_data;
++    AVIOContext *pb = s->pb;
++    int i, payload_size = 0;
++    char *payload = NULL;
++    AVDictionaryEntry *payload_tag = NULL;
++    ssize_t write_length = 0;
++    uint8_t* buffer = NULL;
++    size_t bufsize = 0;
++
++    char path[RUSH_ARRAY_SIZE];
++    char proto[RUSH_ARRAY_SIZE];
++    memset(path, '\0', sizeof(char) * RUSH_ARRAY_SIZE);
++    memset(proto, '\0', sizeof(char) * RUSH_ARRAY_SIZE);
++
++    av_url_split(proto, sizeof(proto),
++        NULL, 0,
++        NULL, 0,
++        NULL,
++        path, sizeof(path),
++        s->url);
++
++    if (strlen(proto) && strcmp(proto, "rush")) {
++      av_log(s, AV_LOG_ERROR, "Protocol %s not supported\n", proto);
++      return AVERROR(EINVAL);
++    }
++
++    // if we are using a network protocol (including file://) use the
++    // path as a payload. If we are not using a protocol, try reading
++    // payload from the metadata
++    if (strlen(proto)) {
++      payload = av_asprintf("{\"url\" : \"%s\"}", path);
++    }
++    else {
++      payload_tag = av_dict_get(s->metadata, "connect_payload", NULL, 0);
++      payload = payload_tag ? payload_tag->value : NULL;
++    }
++
++    for (i = 0; i < s->nb_streams; ++i) {
++      AVStream *st = s->streams[i];
++      const enum AVMediaType media_type = st->codecpar->codec_type;
++      const enum AVCodecID codec = st->codecpar->codec_id;
++      if (media_type == AVMEDIA_TYPE_AUDIO && is_codec_supported(media_type, codec)) {
++
++        addAudioStream(ctx->rush_muxer, st->codecpar->sample_rate, i);
++        avpriv_set_pts_info(s->streams[i], 64, 1, getAudioTimescale(ctx->rush_muxer));
++      }
++      else if (media_type == AVMEDIA_TYPE_VIDEO && is_codec_supported(media_type, codec)) {
++        addVideoStream(ctx->rush_muxer, st->time_base.den, i);
++        avpriv_set_pts_info(s->streams[i], 64, 1, getVideoTimescale(ctx->rush_muxer));
++      }
++      else {
++        av_log(s, AV_LOG_WARNING, "Unhandled format %d\n", media_type);
++      }
++    }
++
++    payload_size = payload ? strlen(payload) : 0;
++
++    bufsize = getRushFrameSize(payload_size, 0);
++    buffer = av_malloc(bufsize);
++
++    write_length = connectFrame(ctx->rush_muxer, payload, payload_size, buffer, bufsize);
++    avio_write(pb, buffer, write_length);
++
++    if (payload) {
++      av_free(payload);
++    }
++
++    av_free(buffer);
++    return 0;
++}
++
++static int rush_write_trailer(AVFormatContext *s)
++{
++    RushContext *ctx = (RushContext*)s->priv_data;
++    AVIOContext *pb = s->pb;
++
++    size_t bufsize = getRushFrameSize(0, 0);
++    uint8_t *buffer = av_malloc(bufsize);
++    ssize_t write_length = 0;
++
++    write_length = endOfStreamFrame(ctx->rush_muxer, buffer, bufsize);
++    avio_write(pb, buffer, write_length);
++
++    av_free(buffer);
++    return 0;
++}
++
++static int rush_check_bitstream(AVFormatContext *s, AVStream *st,
++                                const AVPacket *pkt) {
++  int ret = 1;
++  if (st->codecpar->codec_id == AV_CODEC_ID_AAC) {
++    if (pkt->size > 2 && (AV_RB16(pkt->data) & 0xfff0) == 0xfff0) {
++      ret = ff_stream_add_bitstream_filter(st, "aac_adtstoasc", NULL);
++    }
++  }
++  return ret;
++}
++
++const AVOutputFormat ff_rush_muxer = {
++  .name            = "rush",
++  .long_name       = "RUSH/1",
++  .extensions      = "rush",
++  .priv_data_size  = sizeof(RushContext),
++  .audio_codec     = AV_CODEC_ID_AAC,
++  .video_codec     = AV_CODEC_ID_H264,
++  .init            = rush_init,
++  .deinit          = rush_deinit,
++  .write_packet    = rush_write_packet,
++  .write_header    = rush_write_header,
++  .write_trailer   = rush_write_trailer,
++  .check_bitstream = rush_check_bitstream,
++  .codec_tag       = (const AVCodecTag* const []) {
++    rush_video_codec_ids, rush_audio_codec_ids, 0
++  },
++};
