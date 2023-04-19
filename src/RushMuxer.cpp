@@ -84,7 +84,7 @@ ssize_t RushMuxer::connectFrame(
     uint8_t* buffer,
     int bufferLength) {
   const uint64_t sequenceId = getSequenceId();
-  auto const connectPayload = (ByteStream){.data = payload, .length = length};
+  auto const connectPayload = ByteStream(payload, length);
   ConnectFrame frame(
       sequenceId,
       kRushVersion,
@@ -116,11 +116,11 @@ ssize_t RushMuxer::videoWithTrackFrame(
   }
 
   const uint64_t sequenceId = getSequenceId();
-  const bool addExtradata = isKeyFrame;
-  const auto sample = (ByteStream){.data = data, .length = length};
-  const auto codecData = addExtradata
-      ? (ByteStream){.data = extradata, .length = extradataLength}
-      : ByteStream();
+  const bool addExtradata =
+      ((codec != VideoCodec::H264 && isKeyFrame) || h264ProcessExtradata);
+  const auto sample = ByteStream(data, length);
+  const auto codecData =
+      addExtradata ? ByteStream(extradata, extradataLength) : ByteStream();
   const uint8_t trackId = indexToTrackId_[index];
   const uint16_t requiredFrameOffset =
       getRequiredFrameOffset(isKeyFrame, sequenceId, index);
@@ -182,10 +182,9 @@ ssize_t RushMuxer::audioWithTrackFrame(
   const uint64_t sequenceId = getSequenceId();
   const uint8_t trackId = indexToTrackId_[index];
   const bool addExtradata = (codec == AudioCodec::Opus);
-  const auto sample = (ByteStream){.data = data, .length = length};
-  const auto codecData = addExtradata
-      ? (ByteStream){.data = extradata, .length = extradataLength}
-      : ByteStream();
+  const auto sample = ByteStream(data, length);
+  const auto codecData =
+      addExtradata ? ByteStream(extradata, extradataLength) : ByteStream();
   AudioWithTrackFrame frame(sequenceId, codec, pts, trackId, sample, codecData);
 
   Cursor writeCursor(buffer, bufferLength);
@@ -209,9 +208,8 @@ ssize_t RushMuxer::audioWithHeaderFrame(
   }
   const uint64_t sequenceId = getSequenceId();
   const uint8_t trackId = indexToTrackId_[index];
-  const auto sample = (ByteStream){.data = data, .length = length};
-  const auto codecData =
-      (ByteStream){.data = extradata, .length = extradataLength};
+  const auto sample = ByteStream(data, length);
+  const auto codecData = ByteStream(extradata, extradataLength);
   const uint16_t headerLength = static_cast<uint16_t>(extradataLength);
   AudioWithHeaderFrame frame(
       sequenceId, codec, pts, trackId, headerLength, sample, codecData);
