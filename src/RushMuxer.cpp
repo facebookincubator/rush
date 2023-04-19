@@ -116,8 +116,7 @@ ssize_t RushMuxer::videoWithTrackFrame(
   }
 
   const uint64_t sequenceId = getSequenceId();
-  const bool addExtradata =
-      ((codec != VideoCodec::H264 && isKeyFrame) || h264ProcessExtradata);
+  const bool addExtradata = isKeyFrame;
   const auto sample = ByteStream(data, length);
   const auto codecData =
       addExtradata ? ByteStream(extradata, extradataLength) : ByteStream();
