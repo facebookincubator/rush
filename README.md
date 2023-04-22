@@ -15,11 +15,11 @@ If you just want pull a pre built docker image, you just need to:
 1. Make sure you have Docker installed in your machine. See [get docker](https://docs.docker.com/get-docker/)
 2. Pull the docker image and start streaming by doing:
 ```
-docker run --rm -it facebookincubator/docker-ffmpeg-rush:1.1 -hide_banner -y -fflags +genpts -f lavfi -i smptebars=duration=300:size=640x360:rate=30 -re -f lavfi -i sine=duration=300:frequency=1000:sample_rate=44100 -c:v libx264 -preset medium -profile:v baseline -g 60 -b:v 1000k -maxrate:v 1200k -bufsize:v 2000k -a53cc 0 -c:a aac -b:a 128k -ac 2 -vf "drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf: text=\'Local time %{localtime\: %Y\/%m\/%d %H.%M.%S} (%{n})\': x=10: y=10: fontsize=16: fontcolor=white: box=1: boxcolor=0x00000099" -f rush RUSH_URL
+docker run --rm -it ghcr.io/facebookincubator/rush:main -hide_banner -y -fflags +genpts -f lavfi -i smptebars=duration=300:size=640x360:rate=30 -re -f lavfi -i sine=duration=300:frequency=1000:sample_rate=44100 -c:v libx264 -preset medium -profile:v baseline -g 60 -b:v 1000k -maxrate:v 1200k -bufsize:v 2000k -a53cc 0 -c:a aac -b:a 128k -ac 2 -vf "drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf: text=\'Local time %{localtime\: %Y\/%m\/%d %H.%M.%S} (%{n})\': x=10: y=10: fontsize=16: fontcolor=white: box=1: boxcolor=0x00000099" -f rush RUSH_URL
 ```
 3. OR Create a RUSH file by doing:
 ```
-docker run --rm -it facebookincubator/docker-ffmpeg-rush:1.1 -hide_banner -y -fflags +genpts -f lavfi -i smptebars=duration=300:size=640x360:rate=30 -re -f lavfi -i sine=duration=300:frequency=1000:sample_rate=44100 -c:v libx264 -preset medium -profile:v baseline -g 60 -b:v 1000k -maxrate:v 1200k -bufsize:v 2000k -a53cc 0 -c:a aac -b:a 128k -ac 2 -vf "drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf: text=\'Local time %{localtime\: %Y\/%m\/%d %H.%M.%S} (%{n})\': x=10: y=10: fontsize=16: fontcolor=white: box=1: boxcolor=0x00000099" -f rush MY_FILE.rush
+docker run --rm -it ghcr.io/facebookincubator/rush:main -hide_banner -y -fflags +genpts -f lavfi -i smptebars=duration=300:size=640x360:rate=30 -re -f lavfi -i sine=duration=300:frequency=1000:sample_rate=44100 -c:v libx264 -preset medium -profile:v baseline -g 60 -b:v 1000k -maxrate:v 1200k -bufsize:v 2000k -a53cc 0 -c:a aac -b:a 128k -ac 2 -vf "drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf: text=\'Local time %{localtime\: %Y\/%m\/%d %H.%M.%S} (%{n})\': x=10: y=10: fontsize=16: fontcolor=white: box=1: boxcolor=0x00000099" -f rush MY_FILE.rush
 ```
 
 ## Building this library
