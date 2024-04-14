@@ -283,7 +283,7 @@ int shouldProcessExtradata(
     }
 
     const uint8_t peek = data[readCursor.position()];
-    const auto nalType = static_cast<Nal>((peek)&0x1F);
+    const auto nalType = static_cast<Nal>((peek) & 0x1F);
 
     switch (nalType) {
       case Nal::Sps:
