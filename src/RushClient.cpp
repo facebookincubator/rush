@@ -183,7 +183,7 @@ int RushClient::onRecvStreamData(
         break;
     }
     processed = length;
-  } catch (const std::out_of_range& error) {
+  } catch (const std::out_of_range&) {
     processed = 0;
   }
 

@@ -31,7 +31,7 @@ int isAnnexb(uint8_t* data, int length) {
       return 1;
     }
     return 0;
-  } catch (const std::out_of_range& error) {
+  } catch (const std::out_of_range&) {
     return 1;
   }
   return 1;
@@ -51,7 +51,7 @@ int isAvccFit(uint8_t* data, int length) {
       }
       readCursor.advance(naluLength);
     } while (readCursor.available());
-  } catch (const std::out_of_range& ex) {
+  } catch (const std::out_of_range&) {
     return 0;
   }
   return 1;
@@ -79,7 +79,7 @@ int isHEVCConfigRecord(uint8_t* data, size_t length) {
       return 1;
     }
     return 0;
-  } catch (const std::out_of_range& error) {
+  } catch (const std::out_of_range&) {
     return 1;
   }
 }
@@ -171,7 +171,7 @@ ssize_t getParameterFromConfigRecordHEVC(
         readCursor.advance(naluLength);
       }
     }
-  } catch (const std::out_of_range& error) {
+  } catch (const std::out_of_range&) {
     std::cerr << "Error processing HEVC Config Record" << std::endl;
     return -1;
   }
@@ -248,7 +248,7 @@ ssize_t getPrameterFromConfigRecordH264(
         readCursor.advance(naluLength);
       }
     }
-  } catch (const std::out_of_range& error) {
+  } catch (const std::out_of_range&) {
     std::cerr << "Could not parse H264 Config Record" << std::endl;
     return -1;
   }
@@ -273,7 +273,7 @@ int shouldProcessExtradata(
     try {
       naluLength = 0;
       readCursor.readBE(naluLength);
-    } catch (const std::out_of_range& error) {
+    } catch (const std::out_of_range&) {
       std::cerr << "Invalid NALU length" << std::endl;
       return -1;
     }
